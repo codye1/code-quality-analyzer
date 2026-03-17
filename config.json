@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "language": "uk",
+  "theme": {
+    "primaryColor": "emerald",
+    "darkMode": false
+  },
+  "paths": {
+    "logFile": "app.log",
+    "reportsDir": "reports"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "AI Software Quality Analyzer",
+  "description": "An AI-powered system for analyzing software metrics, evaluating code quality, and predicting defect risks.",
+  "requestFramePermissions": []
+}
