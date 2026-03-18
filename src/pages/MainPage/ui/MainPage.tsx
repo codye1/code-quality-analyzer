@@ -7,6 +7,7 @@ import { FileUploader } from '../../../widgets/FileUploader/ui/FileUploader';
 import { AnalysisDashboard } from '../../../widgets/AnalysisDashboard/ui/AnalysisDashboard';
 import { SystemLogs } from '../../../widgets/SystemLogs/ui/SystemLogs';
 import { MetricGuide } from '../../../widgets/MetricGuide/ui/MetricGuide';
+import { cn } from '@/src/shared/lib/utils/cn';
 
 export const MainPage = () => {
   const {
@@ -32,11 +33,11 @@ export const MainPage = () => {
     MAX_CONTEXT_SIZE
   } = useFileAnalysis();
 
-  const selectedFileAnalysis = selectedFileIndex !== null && result?.fileAnalyses 
-    ? result.fileAnalyses[selectedFileIndex] 
+  const selectedFileAnalysis = selectedFileIndex !== null && result?.fileAnalyses
+    ? result.fileAnalyses[selectedFileIndex]
     : null;
-  
-  const selectedFileContent = selectedFileAnalysis 
+
+  const selectedFileContent = selectedFileAnalysis
     ? uploadedFiles.find(f => {
         const normalizedUploaded = f.name.replace(/\\/g, '/').toLowerCase();
         const normalizedAnalysis = selectedFileAnalysis.fileName.replace(/\\/g, '/').toLowerCase();
@@ -49,7 +50,7 @@ export const MainPage = () => {
         const baseAnalysis = cleanAnalysis.split('/').pop();
         if (baseUploaded === baseAnalysis && baseUploaded !== '') return true;
         return false;
-      })?.content 
+      })?.content
     : null;
 
   return (
@@ -59,7 +60,7 @@ export const MainPage = () => {
       <main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column: Inputs */}
         <section className="lg:col-span-4 space-y-6">
-          <FileUploader 
+          <FileUploader
             uploadedFiles={uploadedFiles}
             isDragging={isDragging}
             loading={loading}
@@ -116,7 +117,7 @@ export const MainPage = () => {
             )}
 
             {result && !loading && (
-              <AnalysisDashboard 
+              <AnalysisDashboard
                 result={result}
                 metrics={metrics}
                 handleExport={handleExport}
@@ -146,7 +147,7 @@ export const MainPage = () => {
       </footer>
 
       {/* Code Viewer Modal */}
-      <AnimatePresence>
+           <AnimatePresence>
         {selectedFileAnalysis && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -172,7 +173,7 @@ export const MainPage = () => {
                     <p className="text-xs text-slate-500">Детальний аналіз проблемних частин коду</p>
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={() => setSelectedFileIndex(null)}
                   className="p-2 hover:bg-slate-100 rounded-full transition-colors"
                 >
@@ -183,23 +184,71 @@ export const MainPage = () => {
               <div className="flex-1 overflow-auto p-6 bg-slate-50 font-mono text-sm custom-scrollbar">
                 {selectedFileContent ? (
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                    {selectedFileContent.split('\n').map((line, idx) => (
-                      <div key={idx} className="flex hover:bg-slate-50 transition-colors group">
-                        <div className="w-12 flex-shrink-0 text-right pr-4 py-0.5 text-slate-300 select-none border-r border-slate-100 bg-slate-50/50 group-hover:text-slate-400">
-                          {idx + 1}
-                        </div>
-                        <div className="pl-4 py-0.5 whitespace-pre break-all">
-                          {line || ' '}
-                        </div>
+                    {selectedFileContent.split('\n').map((line, idx) => {
+                      const lineNumber = idx + 1;
+                      const issue = selectedFileAnalysis.issues?.find(iss => Number(iss.line) === lineNumber);
+
+                      return (
+                        <div key={idx} className="relative group">
+                          <div className={cn(
+                            "flex items-start",
+                            issue ? "bg-red-50/70" : "hover:bg-slate-50/50"
+                          )}>
+                            <div className={cn(
+                              "w-12 py-1 px-2 text-right select-none border-r border-slate-100 font-bold",
+                              issue ? "bg-red-100 text-red-600" : "bg-slate-50/50 text-slate-300"
+                            )}>
+                              {lineNumber}
+                            </div>
+                            <pre className="flex-1 py-1 px-4 whitespace-pre overflow-x-auto">
+                              {line || ' '}
+                            </pre>
+                          </div>
+
+                        {issue && (
+                          <div className="ml-12 mr-6 my-2 p-3 bg-red-100 border-l-4 border-red-500 rounded-r-lg shadow-sm">
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-red-200 text-red-700 rounded">
+                                    {issue.severity} Risk
+                                  </span>
+                                </div>
+                                <p className="text-red-800 text-xs leading-relaxed font-sans">
+                                  {issue.description}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
+                </div>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                    <FileText className="w-12 h-12 mb-4 opacity-20" />
-                    <p>Вміст файлу недоступний для перегляду</p>
+                  <div className="h-full flex flex-col items-center justify-center text-center p-12 space-y-4">
+                    <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center text-slate-400">
+                      <FileText className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-bold text-slate-700">Вміст файлу не знайдено</h4>
+                      <p className="text-slate-500 max-w-md mx-auto mt-2">
+                        На жаль, ми не змогли знайти вміст файлу "{selectedFileAnalysis.fileName}" серед завантажених даних.
+                        Спробуйте завантажити файли ще раз або переконайтеся, що шлях до файлу вірний.
+                      </p>
+                    </div>
                   </div>
                 )}
+              </div>
+
+              <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+                <button
+                  onClick={() => setSelectedFileIndex(null)}
+                  className="px-6 py-2 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-colors"
+                >
+                  Закрити
+                </button>
               </div>
             </motion.div>
           </motion.div>

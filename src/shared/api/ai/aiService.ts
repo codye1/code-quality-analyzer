@@ -1,8 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { SoftwareMetrics, AnalysisResult, FileAnalysis } from "../../../entities/Analysis/model/types";
 
-const modelToUse = "gemini-2.5-flash"
+const modelToUse = "gemini-2.5-flash-lite"
 //"gemini-3.1-pro-preview"
+//"gemini-2.5-flash"
 
 export async function analyzeSoftwareQuality(metrics: SoftwareMetrics): Promise<AnalysisResult> {
   const apiKey = process.env.GEMINI_API_KEY;
