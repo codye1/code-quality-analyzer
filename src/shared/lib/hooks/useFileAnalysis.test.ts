@@ -7,6 +7,49 @@ vi.mock('../../../shared/api/ai/aiService', () => ({
   logToBackend: vi.fn(),
 }));
 
+vi.mock('html2canvas', () => ({
+  default: vi.fn(async () => ({
+    width: 800,
+    height: 1200,
+    toDataURL: vi.fn(() => 'data:image/png;base64,mock'),
+  })),
+}));
+
+vi.mock('jspdf', () => {
+  class MockJsPdf {
+    internal = {
+      pageSize: {
+        getWidth: () => 210,
+        getHeight: () => 297,
+      },
+    };
+    addImage = vi.fn();
+    addPage = vi.fn();
+    save = vi.fn();
+  }
+
+  let lastInstance: MockJsPdf | null = null;
+  let nextSaveError: Error | null = null;
+
+  class jsPDF {
+    constructor() {
+      lastInstance = new MockJsPdf();
+      if (nextSaveError) {
+        const err = nextSaveError;
+        nextSaveError = null;
+        lastInstance.save.mockImplementationOnce(() => { throw err; });
+      }
+      return lastInstance as unknown as jsPDF;
+    }
+  }
+
+  return {
+    jsPDF,
+    __getLastJsPdfInstance: () => lastInstance,
+    __setNextJsPdfSaveError: (error: Error) => { nextSaveError = error; }
+  };
+});
+
 import { analyzeSourceCode } from '../../../shared/api/ai/aiService';
 import { useFileAnalysis } from './useFileAnalysis';
 
@@ -54,6 +97,13 @@ beforeEach(() => {
 
   global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
   global.URL.revokeObjectURL = vi.fn();
+
+  HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+    drawImage: vi.fn(),
+    fillRect: vi.fn(),
+    fillText: vi.fn(),
+  })) as unknown as HTMLCanvasElement['getContext'];
+  HTMLCanvasElement.prototype.toDataURL = vi.fn(() => 'data:image/png;base64,mock');
 
   vi.mocked(analyzeSourceCode).mockResolvedValue(MOCK_RESULT);
 });
@@ -111,6 +161,33 @@ describe('useFileAnalysis — нормальні умови', () => {
     act(() => result.current.clearFiles());
     expect(result.current.uploadedFiles).toEqual([]);
   });
+
+  it('handleExportPdf після аналізу зберігає PDF', async () => {
+    const { result } = renderHook(() => useFileAnalysis());
+
+    await act(async () => {
+      await result.current.handleFileUpload(makeFileList([makeFile('app.ts', 'const x = 1;')]))
+    });
+    await act(async () => { await result.current.handleAnalyze(); });
+
+    const { __getLastJsPdfInstance } = await import('jspdf');
+
+    await act(async () => { await result.current.handleExportPdf(); });
+    const pdfInstance = __getLastJsPdfInstance();
+    expect(pdfInstance?.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('handleExportPdf пише лог про успішний експорт', async () => {
+    const { result } = renderHook(() => useFileAnalysis());
+
+    await act(async () => {
+      await result.current.handleFileUpload(makeFileList([makeFile('app.ts', 'const x = 1;')]))
+    });
+    await act(async () => { await result.current.handleAnalyze(); });
+    await act(async () => { await result.current.handleExportPdf(); });
+
+    expect(result.current.logs.some(l => l.includes('PDF звіт успішно експортовано'))).toBe(true);
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -165,6 +242,44 @@ describe('useFileAnalysis — граничні умови', () => {
 
     expect(result.current.metrics.loc).toBe(defaultLoc);
   });
+
+  it('handleExportPdf генерує кілька сторінок для великого контенту', async () => {
+    const html2canvas = (await import('html2canvas')).default as unknown as ReturnType<typeof vi.fn>;
+    html2canvas.mockResolvedValueOnce({
+      width: 800,
+      height: 6000,
+      toDataURL: vi.fn(() => 'data:image/png;base64,mock'),
+    });
+
+    const { result } = renderHook(() => useFileAnalysis());
+
+    await act(async () => {
+      await result.current.handleFileUpload(makeFileList([makeFile('app.ts', 'const x = 1;')]))
+    });
+    await act(async () => { await result.current.handleAnalyze(); });
+    await act(async () => { await result.current.handleExportPdf(); });
+
+    const { __getLastJsPdfInstance } = await import('jspdf');
+    const pdfInstance = __getLastJsPdfInstance();
+    expect(pdfInstance?.addPage).toHaveBeenCalled();
+  });
+
+  it('handleExportPdf працює навіть коли файлАналізи порожні', async () => {
+    vi.mocked(analyzeSourceCode).mockResolvedValueOnce({
+      ...MOCK_RESULT,
+      fileAnalyses: [],
+    });
+
+    const { result } = renderHook(() => useFileAnalysis());
+
+    await act(async () => {
+      await result.current.handleFileUpload(makeFileList([makeFile('app.ts', 'const x = 1;')]))
+    });
+    await act(async () => { await result.current.handleAnalyze(); });
+    await act(async () => { await result.current.handleExportPdf(); });
+
+    expect(result.current.logs.some(l => l.includes('PDF звіт успішно експортовано'))).toBe(true);
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -197,11 +312,44 @@ describe('useFileAnalysis — виняткові ситуації', () => {
     expect(result.current.loading).toBe(false);
   });
 
-  it('handleExport без result нічого не робить; помилка createObjectURL пишеться в лог', async () => {
+  it('handleExportPdf без result нічого не робить; помилка експорту пишеться в лог', async () => {
     const { result } = renderHook(() => useFileAnalysis());
 
     // Без result — нічого не відбувається
-    act(() => result.current.handleExport());
+    await act(async () => { await result.current.handleExportPdf(); });
+
+    await act(async () => {
+      await result.current.handleFileUpload(makeFileList([makeFile('a.ts', 'a')]));
+    });
+    await act(async () => { await result.current.handleAnalyze(); });
+
+    const html2canvas = (await import('html2canvas')).default as unknown as ReturnType<typeof vi.fn>;
+    html2canvas.mockRejectedValueOnce(new Error('pdf error'));
+
+    await act(async () => { await result.current.handleExportPdf(); });
+    expect(result.current.logs.some(l => l.includes('Помилка експорту PDF звіту'))).toBe(true);
+  });
+
+  it('handleExportPdf фіксує помилку, якщо pdf.save кидає помилку', async () => {
+    const { result } = renderHook(() => useFileAnalysis());
+
+    await act(async () => {
+      await result.current.handleFileUpload(makeFileList([makeFile('app.ts', 'const x = 1;')]))
+    });
+    await act(async () => { await result.current.handleAnalyze(); });
+
+    const { __setNextJsPdfSaveError } = await import('jspdf');
+    __setNextJsPdfSaveError(new Error('save failed'));
+
+    await act(async () => { await result.current.handleExportPdf(); });
+    expect(result.current.logs.some(l => l.includes('Помилка експорту PDF звіту'))).toBe(true);
+  });
+
+  it('handleExportJson без result нічого не робить; помилка експорту пишеться в лог', async () => {
+    const { result } = renderHook(() => useFileAnalysis());
+
+    // Без result — нічого не відбувається
+    act(() => result.current.handleExportJson());
     expect(URL.createObjectURL).not.toHaveBeenCalled();
 
     // З result, але createObjectURL кидає помилку
@@ -213,8 +361,8 @@ describe('useFileAnalysis — виняткові ситуації', () => {
       await result.current.handleFileUpload(makeFileList([makeFile('a.ts', 'a')]));
     });
     await act(async () => { await result.current.handleAnalyze(); });
-    act(() => result.current.handleExport());
+    act(() => result.current.handleExportJson());
 
-    expect(result.current.logs.some(l => l.includes('Помилка експорту звіту'))).toBe(true);
+    expect(result.current.logs.some(l => l.includes('Помилка експорту JSON звіту'))).toBe(true);
   });
 });

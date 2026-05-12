@@ -5,6 +5,37 @@ const modelToUse = "gemini-2.5-flash-lite"
 //"gemini-3.1-pro-preview"
 //"gemini-2.5-flash"
 
+const normalizeNumber = (value: unknown) => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const normalizeMetrics = (metrics: any): SoftwareMetrics => ({
+  loc: normalizeNumber(metrics?.loc),
+  cyclomaticComplexity: normalizeNumber(metrics?.cyclomaticComplexity),
+  halsteadVolume: normalizeNumber(metrics?.halsteadVolume),
+  maintainabilityIndex: normalizeNumber(metrics?.maintainabilityIndex),
+  depthOfInheritance: normalizeNumber(metrics?.depthOfInheritance),
+  couplingBetweenObjects: normalizeNumber(metrics?.couplingBetweenObjects),
+});
+
+const metricsAreEmpty = (metrics?: SoftwareMetrics) => {
+  if (!metrics) return true;
+  const values = [
+    metrics.loc,
+    metrics.cyclomaticComplexity,
+    metrics.halsteadVolume,
+    metrics.maintainabilityIndex,
+    metrics.depthOfInheritance,
+    metrics.couplingBetweenObjects,
+  ];
+  return values.every(value => value === 0 || !Number.isFinite(value));
+};
+
 export async function analyzeSoftwareQuality(metrics: SoftwareMetrics): Promise<AnalysisResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("API ключ не налаштовано.");
@@ -161,7 +192,8 @@ export async function analyzeSourceCode(
           allFileAnalyses.push({
             ...f,
             score: typeof f.score === 'number' ? f.score : parseInt(String(f.score || '0')),
-            issues: Array.isArray(f.issues) ? f.issues : []
+            issues: Array.isArray(f.issues) ? f.issues : [],
+            metrics: f.metrics ? normalizeMetrics(f.metrics) : undefined
           });
         });
       }
@@ -217,18 +249,28 @@ export async function analyzeSourceCode(
       else finalResult = {};
     }
 
-    // Aggregate metrics if missing from final result
-    if (!finalResult.extractedMetrics) {
-      const aggregated = allFileAnalyses.reduce((acc: any, file: any) => {
-        if (file.metrics) {
-          acc.loc += (file.metrics.loc || 0);
-          acc.cyclomaticComplexity = Math.max(acc.cyclomaticComplexity, file.metrics.cyclomaticComplexity || 0);
-          acc.halsteadVolume += (file.metrics.halsteadVolume || 0);
-          acc.maintainabilityIndex = acc.maintainabilityIndex === 0 ? (file.metrics.maintainabilityIndex || 0) : (acc.maintainabilityIndex + (file.metrics.maintainabilityIndex || 0)) / 2;
-        }
-        return acc;
-      }, { loc: 0, cyclomaticComplexity: 0, halsteadVolume: 0, maintainabilityIndex: 0, depthOfInheritance: 0, couplingBetweenObjects: 0 });
+    const aggregated = allFileAnalyses.reduce((acc: SoftwareMetrics, file: FileAnalysis) => {
+      if (file.metrics) {
+        acc.loc += file.metrics.loc || 0;
+        acc.cyclomaticComplexity = Math.max(acc.cyclomaticComplexity, file.metrics.cyclomaticComplexity || 0);
+        acc.halsteadVolume += file.metrics.halsteadVolume || 0;
+        acc.maintainabilityIndex = acc.maintainabilityIndex === 0
+          ? (file.metrics.maintainabilityIndex || 0)
+          : (acc.maintainabilityIndex + (file.metrics.maintainabilityIndex || 0)) / 2;
+        acc.depthOfInheritance = Math.max(acc.depthOfInheritance, file.metrics.depthOfInheritance || 0);
+        acc.couplingBetweenObjects = Math.max(acc.couplingBetweenObjects, file.metrics.couplingBetweenObjects || 0);
+      }
+      return acc;
+    }, { loc: 0, cyclomaticComplexity: 0, halsteadVolume: 0, maintainabilityIndex: 0, depthOfInheritance: 0, couplingBetweenObjects: 0 });
+
+    const normalizedFinalMetrics = finalResult.extractedMetrics
+      ? normalizeMetrics(finalResult.extractedMetrics)
+      : undefined;
+
+    if (!normalizedFinalMetrics || metricsAreEmpty(normalizedFinalMetrics)) {
       finalResult.extractedMetrics = aggregated;
+    } else {
+      finalResult.extractedMetrics = normalizedFinalMetrics;
     }
 
     return {
