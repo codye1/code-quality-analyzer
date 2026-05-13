@@ -29,7 +29,8 @@ export const MainPage = () => {
     onDrop,
     removeFile,
     clearFiles,
-    handleExport,
+    handleExportJson,
+    handleExportPdf,
     MAX_CONTEXT_SIZE
   } = useFileAnalysis();
 
@@ -120,7 +121,8 @@ export const MainPage = () => {
               <AnalysisDashboard
                 result={result}
                 metrics={metrics}
-                handleExport={handleExport}
+                handleExportJson={handleExportJson}
+                handleExportPdf={handleExportPdf}
                 setSelectedFileIndex={setSelectedFileIndex}
               />
             )}

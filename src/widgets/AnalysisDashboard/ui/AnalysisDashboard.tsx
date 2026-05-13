@@ -1,11 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Download, FileText, CheckCircle, FileCode, Activity } from 'lucide-react';
-import { 
-  Radar, 
-  RadarChart, 
-  PolarGrid, 
-  PolarAngleAxis, 
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
   ResponsiveContainer,
   BarChart,
   Bar,
@@ -22,14 +22,16 @@ import { Button } from '../../../shared/ui/Button';
 interface AnalysisDashboardProps {
   result: AnalysisResult;
   metrics: SoftwareMetrics;
-  handleExport: () => void;
+  handleExportJson: () => void;
+  handleExportPdf: () => void;
   setSelectedFileIndex: (index: number) => void;
 }
 
 export const AnalysisDashboard = ({
   result,
   metrics,
-  handleExport,
+  handleExportJson,
+  handleExportPdf,
   setSelectedFileIndex
 }: AnalysisDashboardProps) => {
   const radarData = [
@@ -64,14 +66,17 @@ export const AnalysisDashboard = ({
               {result.summary}
             </p>
             <div className="flex gap-4 pt-4">
-              <Button onClick={handleExport} variant="secondary" icon={<Download className="w-4 h-4" />}>
-                Експортувати звіт
+              <Button onClick={handleExportPdf} variant="secondary" icon={<Download className="w-4 h-4" />}>
+                Завантажити PDF
+              </Button>
+              <Button onClick={handleExportJson} variant="secondary" icon={<Download className="w-4 h-4" />}>
+                Завантажити JSON
               </Button>
             </div>
           </div>
 
           <div className="w-full md:w-80 h-80 bg-slate-50 rounded-3xl p-2 flex flex-col items-center justify-center overflow-visible border border-slate-100">
-            <ResponsiveContainer width="100%" height="70%">
+            <ResponsiveContainer width="100%" height="70%" minWidth={200} minHeight={200}>
               <RadarChart cx="50%" cy="50%" outerRadius="65%" data={radarData} margin={{ top: 10, right: 40, bottom: 10, left: 40 }}>
                 <PolarGrid stroke="#e2e8f0" />
                 <PolarAngleAxis dataKey="subject" tick={{ fontSize: 9, fill: '#64748b', fontWeight: 600 }} />
@@ -84,7 +89,7 @@ export const AnalysisDashboard = ({
                 />
               </RadarChart>
             </ResponsiveContainer>
-            
+
             <div className="w-full px-4 pb-4 space-y-2">
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[9px] text-slate-500">
                 <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> <b>LOC:</b> Рядки коду</div>
@@ -127,8 +132,8 @@ export const AnalysisDashboard = ({
             </h3>
             <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
               {result.fileAnalyses.map((file, i) => (
-                <div 
-                  key={i} 
+                <div
+                  key={i}
                   onClick={() => setSelectedFileIndex(i)}
                   className="group p-4 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all cursor-pointer"
                 >
@@ -148,7 +153,7 @@ export const AnalysisDashboard = ({
                     </div>
                   </div>
                   <p className="text-xs text-slate-500 leading-relaxed">{file.summary}</p>
-                  
+
                   {file.metrics && (
                     <div className="mt-3 grid grid-cols-3 gap-2">
                       <div className="bg-slate-50 p-1.5 rounded-lg text-center border border-slate-100">
@@ -167,7 +172,7 @@ export const AnalysisDashboard = ({
                   )}
 
                   <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className={cn(
                         "h-full transition-all duration-1000",
                         file.score > 70 ? "bg-emerald-500" : file.score > 40 ? "bg-amber-500" : "bg-red-500"
@@ -187,10 +192,10 @@ export const AnalysisDashboard = ({
             Аналіз ризиків за метриками
           </h3>
           <div className="h-48 flex items-center justify-center overflow-hidden">
-            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={160}>
               <BarChart data={radarData}>
                 <XAxis dataKey="subject" hide />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', maxWidth: '300px' }}
                   formatter={(value: number, name: string, props: any) => {
                     const subject = props.payload.subject;
