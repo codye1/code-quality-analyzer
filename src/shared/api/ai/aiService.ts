@@ -1,10 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 import { SoftwareMetrics, AnalysisResult, FileAnalysis } from "../../../entities/Analysis/model/types";
 
-const modelToUse = "gemini-2.5-flash-lite"
+const modelToUse = "gemini-2.5-flash"
 //"gemini-3.1-pro-preview"
 //"gemini-2.5-flash"
-
+//"gemini-2.5-flash-lite"
 const normalizeNumber = (value: unknown) => {
   if (typeof value === 'number') return value;
   if (typeof value === 'string') {
